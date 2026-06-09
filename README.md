@@ -16,12 +16,15 @@
 
 如果你的 Linux 设备没有装 GUI——服务器、NAS、嵌入式盒子、或者干脆只通过 `ssh` 连过去——本 fork 让你**不打开任何浏览器**也能完成日常代理操作：
 
-- 终端里浏览 / 切换代理组和节点：`clashnode list`、`clashnode use`
-- 终端里跑节点测速并按延迟排序：`clashnode test`
-- 添加 / 切换 / 更新订阅：`clashsub add` / `use` / `update`
-- 启停内核、开关系统代理、查看日志：`clashon` / `clashoff` / `clashlog` 等
+- 终端里浏览 / 切换代理组和节点：`clashnode'/`clashnode list`
+<img width="472" height="421" alt="Screenshot From 2026-06-10 00-58-12" src="https://github.com/user-attachments/assets/86f08eea-f31e-434d-b781-c1be36bb1eb1" />
+<img width="472" height="421" alt="Screenshot From 2026-06-10 00-57-40" src="https://github.com/user-attachments/assets/e9352401-cca4-4efd-97cb-4979e87defd5" />
 
-只装一个内核 + 一套 `clashctl` 命令，纯 TTY 下也能用上完整的代理功能。
+- 终端里跑节点测速并按延迟排序：`clashnode test`
+- 启停内核、开关系统代理、查看日志：`clashon` / `clashoff` /
+- 增强模式/Tun模式：‘clashtun on'/'clashtun off'/
+- 命令行不开Tun模式可能无法正常连接，也可能显示Tun模式开了但是不能正常连接，建议把Tun模式重新关了再开一下
+
 
 ## 📸 Preview
 
@@ -78,17 +81,6 @@ bash install.sh mihomo "https://your-subscription-url"
 
 任何子命令后接 `-h` 或 `--help` 都能查看详细用法，例如 `clashnode -h`、`clashsub -h`、`clashtun -h`。
 
-### 订阅管理 `clashsub`
-
-```bash
-clashsub add <url>           # 添加订阅
-clashsub ls                  # 列出所有订阅（含 id、是否启用）
-clashsub use <id>            # 切换到指定订阅
-clashsub del <id>            # 删除订阅
-clashsub update [id]         # 重新下载订阅；id 省略则全部更新
-clashsub update --auto       # 注册 crontab，每 2 天自动更新
-clashsub log                 # 查看订阅相关日志
-```
 
 ### 节点管理与测速 `clashnode`
 
@@ -110,13 +102,6 @@ clashnode use auto           # 在 auto 组里交互式挑节点
 > `clashnode test` 默认测速 URL 是 `http://www.gstatic.com/generate_204`，超时 5000ms。
 > 上游版本此处长期处于"全 999999"状态，因为调用了 mihomo 不存在的端点。本 fork 已修复（见 [Fork 修复](#-fork-修复)）。
 
-## 🛠 Fork 修复
-
-相对上游主要改动：
-
-- **去除硬编码路径**：`scripts/cmd/clashctl.sh` 中残留的 `/home/pi/clashctl/...` 路径全部替换为 `$BIN_KERNEL`、`$CLASH_RESOURCES_DIR`、`$CLASH_CONFIG_RUNTIME` 等变量，使脚本在 `~/clashctl` 或自定义 `CLASH_BASE_DIR` 下都能正常工作。
-- **修复 `clashnode test`**：上游调用的 `/proxy/verify` 在 mihomo 中并不存在（始终返回 404），改为正确的 `/proxies/{name}/delay` 端点，并解析 `.delay` 字段。现在 `clashnode test` 能返回真实延迟而不是清一色 `999999`。
-- **修复 URL 编码注入隐患**：节点名包含 `'` / 反引号 / `$()` 时，旧代码会把字符串直接拼进 `python3 -c "..."` 造成命令注入或语法错误。新版本统一走 `_urlencode` 辅助函数，通过 `argv` 传参，完全避免 shell 字符串插值。
 
 ## 📖 Documentation
 
