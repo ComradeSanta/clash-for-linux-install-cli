@@ -84,27 +84,6 @@ bash install.sh mihomo "https://your-subscription-url"
 任何子命令后接 `-h` 或 `--help` 都能查看详细用法，例如 `clashnode -h`、`clashsub -h`、`clashtun -h`。
 
 
-### 节点管理与测速 `clashnode`
-
-`clashnode` 通过 mihomo 的 `/proxies/{name}/delay` 接口测速，并把节点切换写入运行时配置，不修改任何 YAML 文件。
-
-```bash
-clashnode                    # 方向键浏览代理组（等同 clashnode list）
-clashnode list               # 交互式浏览所有代理组
-clashnode list 1             # 查看序号 1 代理组下所有节点
-clashnode list auto          # 查看名为 auto 的组下所有节点
-clashnode test               # 测速所有节点并按延迟排序（交互式选择）
-clashnode test --url <url> --timeout 3000   # 自定义测速 URL 与超时（ms）
-clashnode use                # 交互式选择代理组 + 节点
-clashnode use 1              # 在序号 1 代理组里交互式挑节点
-clashnode use auto           # 在 auto 组里交互式挑节点
-```
-
-> `clashnode list` 默认方向键 `↑` `↓` 浏览，回车确认；序号 `1` 可与组名 `auto` 互换使用。
-> `clashnode test` 默认测速 URL 是 `http://www.gstatic.com/generate_204`，超时 5000ms。
-> 上游版本此处长期处于"全 999999"状态，因为调用了 mihomo 不存在的端点。本 fork 已修复（见 [Fork 修复](#-fork-修复)）。
-
-
 ## 📖 Documentation
 
 命令用法与上游一致，可参考上游 wiki：
