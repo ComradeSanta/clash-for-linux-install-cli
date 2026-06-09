@@ -17,8 +17,10 @@
 如果你的 Linux 设备没有装 GUI——服务器、NAS、嵌入式盒子、或者干脆只通过 `ssh` 连过去——本 fork 让你**不打开任何浏览器**也能完成日常代理操作：
 
 - 终端里浏览 / 切换代理组和节点：`clashnode'/`clashnode list`
-<img width="472" height="421" alt="Screenshot From 2026-06-10 00-58-12" src="https://github.com/user-attachments/assets/86f08eea-f31e-434d-b781-c1be36bb1eb1" />
 <img width="472" height="421" alt="Screenshot From 2026-06-10 00-57-40" src="https://github.com/user-attachments/assets/e9352401-cca4-4efd-97cb-4979e87defd5" />
+
+<img width="472" height="421" alt="Screenshot From 2026-06-10 00-58-12" src="https://github.com/user-attachments/assets/86f08eea-f31e-434d-b781-c1be36bb1eb1" />
+
 
 - 终端里跑节点测速并按延迟排序：`clashnode test`
 - 启停内核、开关系统代理、查看日志：`clashon` / `clashoff` /
