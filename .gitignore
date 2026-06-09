@@ -9,3 +9,6 @@ test.sh
 
 
 !.gitkeep
+
+# Local Claude Code tool config (machine-specific)
+.claude/

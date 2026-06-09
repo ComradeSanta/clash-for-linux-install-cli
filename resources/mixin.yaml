@@ -40,7 +40,7 @@ proxy-groups:
 
 # tun 配置
 tun:
-  enable: false
+  enable: true
   stack: system
   auto-route: true
   auto-redir: true # clash

@@ -318,16 +318,30 @@ _install_service() {
             "$service_target"
     }
     [ "$INIT_TYPE" != "nohup" ] && service_sudo_start=("${service_start[@]}")
-    sed -i \
-        -e "s#placeholder_start#${service_start[*]}#g" \
-        -e "s#placeholder_sudo_start#${service_sudo_start[*]}#g" \
-        -e "s#placeholder_status#${service_status[*]}#g" \
-        -e "s#placeholder_is_active#${service_is_active[*]}#g" \
-        -e "s#placeholder_stop#${service_stop[*]}#g" \
-        -e "s#placeholder_log#${service_log[*]}#g" \
-        -e "s#placeholder_follow_log#${service_follow_log[*]}#g" \
-        -e "s#placeholder_watch_proxy#${service_watch_proxy[*]}#g" \
-        "$CLASH_CMD_DIR/clashctl.sh" "$CLASH_CMD_DIR/common.sh"
+    python3 -c "
+import re, sys
+files = [sys.argv[1], sys.argv[2]]
+subs = {
+    'placeholder_start': sys.argv[3],
+    'placeholder_sudo_start': sys.argv[4],
+    'placeholder_status': sys.argv[5],
+    'placeholder_is_active': sys.argv[6],
+    'placeholder_stop': sys.argv[7],
+    'placeholder_log': sys.argv[8],
+    'placeholder_follow_log': sys.argv[9],
+    'placeholder_watch_proxy': sys.argv[10],
+}
+for f in files:
+    with open(f) as fh:
+        c = fh.read()
+    for k, v in subs.items():
+        c = c.replace(k, v)
+    with open(f, 'w') as fh:
+        fh.write(c)
+" "$CLASH_CMD_DIR/clashctl.sh" "$CLASH_CMD_DIR/common.sh" \
+    "${service_start[*]}" "${service_sudo_start[*]}" "${service_status[*]}" \
+    "${service_is_active[*]}" "${service_stop[*]}" "${service_log[*]}" \
+    "${service_follow_log[*]}" "${service_watch_proxy[*]}"
 
     "${service_enable[@]}" >&/dev/null && _okcat '🚀' '已设置开机自启'
     ((${#service_reload[@]})) && "${service_reload[@]}"

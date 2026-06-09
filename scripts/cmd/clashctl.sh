@@ -69,7 +69,7 @@ _detect_proxy_port() {
 
 function clashon() {
     _detect_proxy_port
-    clashstatus >&/dev/null || placeholder_start
+    clashstatus >&/dev/null || ( nohup $BIN_KERNEL -d $CLASH_RESOURCES_DIR -f $CLASH_CONFIG_RUNTIME > ${CLASH_RESOURCES_DIR}/${KERNEL_NAME}.log 2>&1 & )
     clashstatus >&/dev/null || {
         _failcat '启动失败: 执行 clashlog 查看日志'
         return 1
@@ -82,18 +82,18 @@ watch_proxy() {
     [ -z "$http_proxy" ] && {
         # [[ "$0" == -* ]] && { # 登录式shell
         [[ $- == *i* ]] && { # 交互式shell
-            placeholder_watch_proxy
+            clashon
         }
     }
 }
 
 function clashoff() {
     clashstatus >&/dev/null && {
-        placeholder_stop >/dev/null
+        pkill -9 -f $BIN_KERNEL >/dev/null
         clashstatus >&/dev/null && _tunstatus >&/dev/null && {
             _tunoff || _error_quit "请先关闭 Tun 模式"
         }
-        placeholder_stop >/dev/null
+        pkill -9 -f $BIN_KERNEL >/dev/null
         clashstatus >&/dev/null && {
             _failcat '代理环境关闭失败'
             return 1
@@ -155,12 +155,12 @@ $(env | grep -i 'proxy=')"
 }
 
 function clashstatus() {
-    placeholder_status "$@"
-    placeholder_is_active >&/dev/null
+    pgrep -fa $BIN_KERNEL "$@"
+    pgrep -fa $BIN_KERNEL >&/dev/null
 }
 
 function clashlog() {
-    placeholder_log "$@"
+    less < ${CLASH_RESOURCES_DIR}/${KERNEL_NAME}.log "$@"
 }
 
 function clashui() {
@@ -271,13 +271,13 @@ _merge_config() {
 
 _merge_config_restart() {
     _merge_config
-    placeholder_stop >/dev/null
+    pkill -9 -f $BIN_KERNEL >/dev/null
     clashstatus >&/dev/null && _tunstatus >&/dev/null && {
         _tunoff || _error_quit "请先关闭 Tun 模式"
     }
-    placeholder_stop >/dev/null
+    pkill -9 -f $BIN_KERNEL >/dev/null
     sleep 0.1
-    placeholder_start >/dev/null
+    ( nohup $BIN_KERNEL -d $CLASH_RESOURCES_DIR -f $CLASH_CONFIG_RUNTIME > ${CLASH_RESOURCES_DIR}/${KERNEL_NAME}.log 2>&1 & ) >/dev/null
     sleep 0.1
 }
 _get_secret() {
@@ -330,7 +330,7 @@ _tunstatus() {
 }
 _tunoff() {
     _tunstatus >/dev/null || return 0
-    sudo placeholder_stop
+    sudo pkill -9 -f $BIN_KERNEL
     # 强制恢复终端输出处理
     stty opost 2>/dev/null
     clashstatus >&/dev/null || {
@@ -343,18 +343,18 @@ _tunoff() {
     _tunstatus >&/dev/null && _failcat "Tun 模式关闭失败"
 }
 _sudo_restart() {
-    sudo placeholder_stop
-    placeholder_sudo_start
+    sudo pkill -9 -f $BIN_KERNEL
+    sudo sh -c "nohup $BIN_KERNEL -d $CLASH_RESOURCES_DIR -f $CLASH_CONFIG_RUNTIME < /dev/null > ${CLASH_RESOURCES_DIR}/${KERNEL_NAME}.log 2>&1 &"
     sleep 0.5
     # 强制恢复终端输出处理
     stty opost 2>/dev/null
 }
 _tunon() {
     _tunstatus 2>/dev/null && return 0
-    sudo placeholder_stop
+    sudo pkill -9 -f $BIN_KERNEL
     "$BIN_YQ" -i '.tun.enable = true' "$CLASH_CONFIG_MIXIN"
     _merge_config
-    placeholder_sudo_start
+    sudo sh -c "nohup $BIN_KERNEL -d $CLASH_RESOURCES_DIR -f $CLASH_CONFIG_RUNTIME < /dev/null > ${CLASH_RESOURCES_DIR}/${KERNEL_NAME}.log 2>&1 &"
     sleep 0.5
     # 强制恢复终端输出处理
     stty opost 2>/dev/null
@@ -479,7 +479,7 @@ EOF
     clashstatus >&/dev/null || clashon >/dev/null
     _okcat '⏳' "请求内核升级..."
     [ "$log_flag" = true ] && {
-        log_cmd=(placeholder_follow_log)
+        log_cmd=(tail -f -n 0 ${CLASH_RESOURCES_DIR}/${KERNEL_NAME}.log)
         ("${log_cmd[@]}" &)
 
     }
@@ -682,6 +682,348 @@ _sub_log() {
     tail <"${CLASH_PROFILES_LOG}" "$@"
 }
 
+########################################
+#   交互选择 - 方向键 ↑ ↓ 回车确认     #
+########################################
+_interactive_select() {
+    local items=("$@")
+    local total=${#items[@]} selected=0 key key2
+
+    printf '\e[?25l\n'
+    printf '使用 ↑ ↓ 方向键移动，回车确认\n\n'
+
+    for i in "${!items[@]}"; do
+        if [ "$i" -eq "$selected" ]; then
+            printf '\e[1;32m▸ %s\e[0m\n' "${items[$i]}"
+        else
+            printf '  %s\n' "${items[$i]}"
+        fi
+    done
+
+    while true; do
+        IFS= read -rsn1 key
+        case "$key" in
+        $'\e')
+            read -rsn2 key2 2>/dev/null
+            case "$key2" in
+            '[A') [ "$selected" -gt 0 ] && selected=$((selected - 1)) ;;
+            '[B') [ "$selected" -lt "$((total - 1))" ] && selected=$((selected + 1)) ;;
+            esac
+            printf '\e[%dA' "$total"
+            for i in "${!items[@]}"; do
+                printf '\e[2K\r'
+                if [ "$i" -eq "$selected" ]; then
+                    printf '\e[1;32m▸ %s\e[0m\n' "${items[$i]}"
+                else
+                    printf '  %s\n' "${items[$i]}"
+                fi
+            done
+            ;;
+        '')
+            printf '\e[%dB\e[?25h' "$total"
+            return "$selected"
+            ;;
+        esac
+    done
+}
+
+_node_browse() {
+    local group_names=() group
+    while IFS= read -r group; do
+        [ -z "$group" ] && continue
+        group_names+=("$group")
+    done <<<"$("$BIN_YQ" -r '.proxy-groups[] | .name' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)"
+    [ "${#group_names[@]}" -eq 0 ] && { _failcat "未找到代理组配置"; return 1; }
+
+    _interactive_select "${group_names[@]}"
+    local gsel=$?
+    local selected_group="${group_names[$gsel]}"
+
+    local proxies
+    proxies=$(_clashnode_api GET "/proxies/$(_urlencode "$selected_group")")
+    [ -z "$proxies" ] && return $?
+
+    local now_selected
+    now_selected=$(echo "$proxies" | "$BIN_YQ" '.now // ""')
+
+    local proxy_names=() name
+    while IFS= read -r name; do
+        [ -z "$name" ] && continue
+        [ "$name" = "$now_selected" ] && name="$name  ← 当前"
+        proxy_names+=("$name")
+    done <<<"$(echo "$proxies" | "$BIN_YQ" -r '.all[]' 2>/dev/null)"
+
+    printf '\n'
+    _interactive_select "${proxy_names[@]}"
+    local nsel=$?
+    local selected_node="${proxy_names[$nsel]%  ← 当前}"
+
+    echo ""
+    _node_select "$selected_group" "$selected_node"
+}
+
+########################################
+#         clashnode - 节点管理          #
+########################################
+_urlencode() {
+    python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+
+_clashnode_api() {
+    local method=${1:-GET}
+    local path=$2
+    local data=$3
+    _detect_ext_addr
+    clashstatus >&/dev/null || {
+        _failcat "$KERNEL_NAME 未运行，请先执行 clashon"
+        return 1
+    }
+    if [ -n "$data" ]; then
+        curl -s --noproxy "*" \
+            -X "$method" \
+            -H "Authorization: Bearer $(_get_secret)" \
+            -H "Content-Type: application/json" \
+            -d "$data" \
+            "http://${EXT_IP}:${EXT_PORT}${path}"
+    else
+        curl -s --noproxy "*" \
+            -X "$method" \
+            -H "Authorization: Bearer $(_get_secret)" \
+            "http://${EXT_IP}:${EXT_PORT}${path}"
+    fi
+}
+
+_node_list() {
+    local proxy_groups proxy_list
+    proxy_groups=$("$BIN_YQ" '.proxy-groups[] | .name' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)
+    [ -z "$proxy_groups" ] && {
+        _failcat "未找到代理组配置"
+        return 1
+    }
+    printf "\n%-4s %-s\n" "序号" "代理组"
+    printf "%s\n" "----------------------------------------"
+    local idx=1
+    while IFS= read -r group; do
+        [ -z "$group" ] && continue
+        printf "%-4s %-s\n" "[$idx]" "$group"
+        ((idx++))
+    done <<<"$proxy_groups"
+    printf "\n"
+}
+
+_node_list_proxies() {
+    local group=$1
+    local proxies now_selected
+    proxies=$(_clashnode_api GET "/proxies/$(_urlencode "$group")")
+    now_selected=$(echo "$proxies" | "$BIN_YQ" '.now // ""')
+    echo "$proxies" | "$BIN_YQ" -r '.all[]' 2>/dev/null | while IFS= read -r name; do
+        [ -z "$name" ] && continue
+        if [ "$name" = "$now_selected" ]; then
+            printf "%s\t%s\n" "$name" "← 当前"
+        else
+            echo "$name"
+        fi
+    done
+}
+
+_node_test() {
+    local arg url="http://www.gstatic.com/generate_204" timeout=5000
+    for arg in "$@"; do
+        case $arg in
+        --url)
+            shift
+            url="$1"
+            shift
+            ;;
+        --timeout)
+            shift
+            timeout="$1"
+            shift
+            ;;
+        esac
+    done
+
+    _detect_ext_addr
+    clashstatus >&/dev/null || {
+        _failcat "$KERNEL_NAME 未运行，请先执行 clashon"
+        return 1
+    }
+
+    _okcat '⏳' "正在测速..."
+    local proxy_groups
+    proxy_groups=$("$BIN_YQ" '.proxy-groups[] | .name' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)
+
+    local idx=1 results=()
+    while IFS= read -r group; do
+        [ -z "$group" ] && continue
+        local proxies
+        proxies=$(_clashnode_api GET "/proxies/$(_urlencode "$group")" | "$BIN_YQ" -r '.all[]' 2>/dev/null)
+        while IFS= read -r name; do
+            [ -z "$name" ] && continue
+            local latency
+            latency=$(_clashnode_api GET "/proxies/$(_urlencode "$name")/delay?url=${url}&timeout=${timeout}" 2>/dev/null)
+            local ms
+            ms=$(echo "$latency" | "$BIN_YQ" -r '.delay // 0')
+            [ "$ms" = "0" ] && ms="999999"
+            results+=("$idx|$group|$name|$ms")
+            ((idx++))
+        done <<<"$proxies"
+    done <<<"$proxy_groups"
+
+    printf "\n%-4s %-20s %-s\n" "序号" "延迟(ms)" "节点"
+    printf "%s\n" "-----------------------------------------------------------"
+    local item
+    # Sort by latency (ms numeric, timeout at end)
+    while IFS= read -r item; do
+        [ -z "$item" ] && continue
+        local num group_name node_name ms
+        num="${item%%|*}"
+        item="${item#*|}"
+        group_name="${item%%|*}"
+        item="${item#*|}"
+        node_name="${item%%|*}"
+        ms="${item#*|}"
+        printf "%-4s %-20s [%s] %s\n" "[$num]" "${ms/999999/超时}" "$group_name" "$node_name"
+    done < <(printf '%s\n' "${results[@]}" | sort -t'|' -k4 -n)
+
+    echo ""
+    echo -n "$(_okcat '✈️ ' '请输入序号选择节点（直接回车退出）：')"
+    read -r sel
+    [ -z "$sel" ] && return 0
+
+    local selected
+    selected=$(printf '%s\n' "${results[@]}" | awk -F'|' -v s="$sel" '$1==s {print $2"|"$3}')
+    [ -z "$selected" ] && {
+        _failcat "无效的序号"
+        return 1
+    }
+    local target_group target_node
+    target_group="${selected%%|*}"
+    target_node="${selected#*|}"
+    _node_select "$target_group" "$target_node"
+}
+
+_node_select() {
+    local group=$1 node=$2
+    local res
+    res=$(_clashnode_api PUT "/proxies/$(_urlencode "$group")" "{\"name\":\"${node}\"}")
+    # API returns 204 No Content on success (empty body)
+    [ -z "$res" ] && {
+        _okcat "✅ 已切换：[$group] → $node"
+        return 0
+    }
+    _failcat "切换失败：$res"
+}
+
+_node_use() {
+    local group=$1
+    if [ -z "$group" ]; then
+        echo ""
+        _node_list
+        echo -n "$(_okcat '✈️ ' '请选择代理组序号：')"
+        read -r sel
+        [ -z "$sel" ] && return 0
+        group=$("$BIN_YQ" '.proxy-groups['"$((sel - 1))"'] | .name' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)
+        [ -z "$group" ] && {
+            _failcat "无效的序号"
+            return 1
+        }
+    elif [[ "$group" =~ ^[0-9]+$ ]]; then
+        # resolve numeric argument to group name
+        group=$("$BIN_YQ" '.proxy-groups['$(("$group" - 1))'] | .name' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)
+        [ -z "$group" ] && {
+            _failcat "无效的序号"
+            return 1
+        }
+    fi
+
+    echo ""
+    _okcat "当前组：$group"
+    printf "%-4s %-s\n" "序号" "节点"
+    printf "%s\n" "----------------------------------------"
+    local idx=1
+    _node_list_proxies "$group"
+    echo ""
+    echo -n "$(_okcat '✈️ ' '请选择节点序号：')"
+    read -r sel
+    [ -z "$sel" ] && return 0
+
+    local target_node
+    target_node=$(_node_list_proxies "$group" | sed -n "${sel}p" | awk -F'\t' '{print $1}')
+    [ -z "$target_node" ] && {
+        _failcat "无效的序号"
+        return 1
+    }
+    _node_select "$group" "$target_node"
+}
+
+function clashnode() {
+    case "$1" in
+    -h | --help)
+        cat <<EOF
+
+clashnode - 节点管理与测速
+
+用法:
+  clashnode list [序号|组名]    方向键浏览代理组+回车选节点
+  clashnode test [选项]         测试所有节点延迟并选择节点
+  clashnode use [序号|组名]     切换节点（交互式选择）
+
+示例:
+  clashnode                     等同于 clashnode list
+  clashnode list                方向键 ↑ ↓ 浏览，回车确认
+  clashnode list 1               查看序号 1 的代理组包含哪些节点
+  clashnode list auto            查看 auto 组的所有节点
+  clashnode test                 测试所有节点延迟（交互式选择）
+  clashnode test --url https://example.com --timeout 3000
+  clashnode use                  交互式选择代理组和节点
+  clashnode use 1                交互式选择序号 1 代理组中的节点
+  clashnode use auto             直接切换到 auto 组中的节点
+
+方向键 / 序号说明:
+  list 默认使用方向键 ↑ ↓ 浏览，回车确认选中
+  list/use 均支持序号代替组名，如 clashnode list 1 查看第 1 个代理组
+  test/use 执行后均会显示节点列表，输入序号即可快速切换
+
+clashnode test 选项:
+  --url <url>       指定测速 URL（默认：http://www.gstatic.com/generate_204）
+  --timeout <ms>    超时毫秒（默认：5000）
+
+EOF
+        return 0
+        ;;
+    list)
+        shift
+        if [ -n "$1" ]; then
+            # 支持序号或组名
+            if [[ "$1" =~ ^[0-9]+$ ]]; then
+                local group
+                group=$("$BIN_YQ" '.proxy-groups['$(("$1" - 1))'] | .name' "$CLASH_CONFIG_RUNTIME" 2>/dev/null)
+                [ -z "$group" ] && {
+                    _failcat "无效的序号"
+                    return 1
+                }
+                set -- "$group"
+            fi
+            _node_list_proxies "$1"
+        else
+            _node_browse
+        fi
+        ;;
+    test)
+        shift
+        _node_test "$@"
+        ;;
+    use)
+        shift
+        _node_use "$1"
+        ;;
+    *)
+        _node_browse
+        ;;
+    esac
+}
+
 function clashctl() {
     case "$1" in
     on)
@@ -728,6 +1070,10 @@ function clashctl() {
         shift
         clashupgrade "$@"
         ;;
+    node)
+        shift
+        clashnode "$@"
+        ;;
     *)
         (($#)) && shift
         clashhelp "$@"
@@ -753,6 +1099,7 @@ Commands:
   mixin                 Mixin 配置
   secret                Web 密钥
   upgrade               升级内核
+  node                  节点管理
 
 Global Options:
   -h, --help            显示帮助信息

@@ -27,7 +27,15 @@ clashui
 clashsecret "$(_get_random_val)" >/dev/null
 clashsecret
 
-_okcat '🎉' 'enjoy 🎉'
+clashtun off >/dev/null 2>&1
+clashtun on
+
+_okcat '🎉' '安装完成 🎉'
+echo ""
+echo "  快速使用："
+echo "    clashnode test    # 测试所有节点延迟"
+echo "    clashnode use     # 交互式选择节点"
+echo ""
 clashctl
 
 _valid_config "$CLASH_CONFIG_BASE" && CLASH_CONFIG_URL="file://$CLASH_CONFIG_BASE"
