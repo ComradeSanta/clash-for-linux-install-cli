@@ -12,9 +12,9 @@
 
 > 本仓库基于 [`nelvko/clash-for-linux-install`](https://github.com/nelvko/clash-for-linux-install) fork，修复了若干阻碍跨发行版使用的问题（详见 [Fork 修复](#-fork-修复)）。
 
-## 🎯 适用场景
+## 🎯 新增
 
-如果你的 Linux 设备没有装 GUI——服务器、NAS、嵌入式盒子、或者干脆只通过 `ssh` 连过去——本 fork 让你**不打开任何浏览器**也能完成日常代理操作：
+原本依赖浏览器打开webui才可以选择节点，对于还没有装GUI的设备不太友好，如果你的 Linux 设备没有装 GUI——服务器、NAS、嵌入式盒子、或者只通过 `ssh` 连接。现在这个版本可以让你**不打开任何浏览器**也能完成基础代理操作：
 
 - 终端里浏览 / 切换代理组和节点：`clashnode'/`clashnode list`
 <img width="472" height="421" alt="Screenshot From 2026-06-10 00-57-40" src="https://github.com/user-attachments/assets/e9352401-cca4-4efd-97cb-4979e87defd5" />
@@ -23,9 +23,8 @@
 
 
 - 终端里跑节点测速并按延迟排序：`clashnode test`
-- 启停内核、开关系统代理、查看日志：`clashon` / `clashoff` /
-- 增强模式/Tun模式：‘clashtun on'/'clashtun off'/
-- 命令行不开Tun模式可能无法正常连接，也可能显示Tun模式开了但是不能正常连接，建议把Tun模式重新关了再开一下
+- 增强模式/Tun模式：'clashtun on' 'clashtun off，或者'/'clashctl tun on'/'clashctl tun off。
+- 命令行不开Tun模式可能无法正常连接，建议把Tun模式重新关了再开一下
 
 
 ## 📸 Preview
@@ -46,23 +45,24 @@
 在终端中执行以下命令即可完成安装：
 
 ```bash
-git clone --branch master --depth 1 https://github.com/ComradeSanta/clash-for-linux-install-cli.git \
+git clone https://github.com/ComradeSanta/clash-for-linux-install-cli.git \
   && cd clash-for-linux-install-cli \
   && bash install.sh
 ```
 
-也可以直接指定内核与订阅链接：
-
-```bash
-bash install.sh mihomo "https://your-subscription-url"
-```
-
 - 国内网络环境下可在 `git clone` 前加 `https://gh-proxy.org/` 等[加速前缀](https://ghproxy.link/)。
+```bash
+git clone https://gh-proxy.org/github.com/ComradeSanta/clash-for-linux-install-cli.git \
+  && cd clash-for-linux-install-cli \
+  && bash install.sh
+```
 - 可通过 `.env` 文件自定义安装选项（内核版本、安装路径、Web UI 等）。
 
-## 🧭 命令一览
+## 🧭 使用与命令
 
-安装完成后，shell 中会暴露以下命令（`clashctl` 是顶层入口，其余是其子命令的便捷别名）：
+安装完整后会提示粘贴url，按提示把订阅的url粘贴进去并且按回车
+执行 `clashnode` 选择节点
+命令行环境
 
 | 命令 | 作用 |
 | --- | --- |
@@ -73,7 +73,7 @@ bash install.sh mihomo "https://your-subscription-url"
 | `clashlog` | 查看内核实时日志 |
 | `clashui` | 打印 Web 面板地址 |
 | `clashsecret` | 查看 / 重置 Web 鉴权密钥 |
-| `clashtun [on\|off]` | 开关 Tun 模式（需 `sudo`） |
+| `clashtun [on\|off]` | 开关 Tun 模式 |
 | `clashproxy [on\|off]` | 开关系统代理 |
 | `clashmixin [-e\|-r\|-c]` | 查看 / 编辑 Mixin、运行时、原始订阅配置 |
 | `clashsub <cmd>` | 订阅管理（见下） |
