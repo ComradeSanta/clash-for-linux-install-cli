@@ -409,7 +409,77 @@ _node_hint_fzf() {
     command -v fzf >&/dev/null && return 0
 
     _NODE_FZF_HINT_SHOWN=true
-    _okcat '💡' '未检测到 fzf，已使用编号选择；安装 fzf 可启用搜索式选择界面。' >&2
+    _okcat '💡' '已使用方向键选择；安装 fzf 并 export CLASHCTL_NODE_PICKER=fzf 可启用搜索式选择界面。' >&2
+}
+
+# 选择器路由：交互终端默认方向键；CLASHCTL_NODE_PICKER=fzf 且已装 fzf 时用搜索式界面；
+# 非交互终端回退到编号输入
+_node_picker() {
+    if [ "${CLASHCTL_NODE_PICKER:-}" = "fzf" ] && _node_has_fzf; then
+        printf 'fzf'
+    elif [ -t 0 ]; then
+        printf 'arrow'
+    else
+        printf 'number'
+    fi
+}
+
+_node_arrow_draw() {
+    local -n _ad_disp=$1 _ad_sel=$2
+    local i
+    for i in "${!_ad_disp[@]}"; do
+        printf '\e[2K\r' >&2
+        if [ "$i" -eq "$_ad_sel" ]; then
+            printf '\e[1;32m▸ %s\e[0m\n' "${_ad_disp[$i]}" >&2
+        else
+            printf '  %s\n' "${_ad_disp[$i]}" >&2
+        fi
+    done
+}
+
+# 方向键菜单：↑↓ 移动，Enter 确认，Esc/q 取消
+# 界面输出到 stderr，选中项的值输出到 stdout；取消返回 1
+# 用法：value=$(_node_arrow_select "提示语" 显示数组名 值数组名)
+_node_arrow_select() {
+    local prompt=$1
+    local -n _as_disp=$2
+    local -n _as_vals=$3
+    local total=${#_as_disp[@]} selected=0 key key2
+
+    ((total > 0)) || return 1
+
+    printf '\n%s\n' "$prompt" >&2
+    printf '↑↓ 移动，Enter 确认，Esc/q 取消\n' >&2
+    printf '\e[?25l' >&2 # 隐藏光标，退出前恢复
+    trap 'printf "\e[?25h" >&2' INT
+    _node_arrow_draw "$2" selected
+
+    while true; do
+        IFS= read -rsn1 key
+        case "$key" in
+        $'\e')
+            read -rsn2 -t 0.05 key2 2>/dev/null
+            case "$key2" in
+            '[A') ((selected > 0)) && ((selected -= 1)) ;;
+            '[B') ((selected < total - 1)) && ((selected += 1)) ;;
+            '') break ;; # 单独按 Esc = 取消
+            esac
+            printf '\e[%dA' "$total" >&2
+            _node_arrow_draw "$2" selected
+            ;;
+        '')
+            printf '\e[?25h' >&2
+            trap - INT
+            printf '%s\n' "${_as_vals[$selected]}"
+            return 0
+            ;;
+        q) break ;;
+        esac
+    done
+
+    printf '\e[?25h' >&2
+    trap - INT
+    return 1
 }
 
 _node_fzf_preview_dir() {
@@ -460,7 +530,19 @@ _node_pick_group() {
         ((w > noww)) && noww=$w
     done
 
-    if _node_has_fzf; then
+    if [ "$(_node_picker)" = arrow ]; then
+        local displays=()
+        for i in "${!names[@]}"; do
+            displays+=("$(printf '%s → %s  [%s]' \
+                "$(_pad "${names[$i]}" "$namew")" \
+                "$(_pad "${nows[$i]:-—}" "$noww")" \
+                "${types[$i]}")")
+        done
+        _node_arrow_select "$prompt" displays names
+        return
+    fi
+
+    if [ "$(_node_picker)" = fzf ]; then
         local selected status preview_dir preview_args=()
         preview_dir=$(_node_fzf_preview_dir)
         if [ -n "$preview_dir" ]; then
@@ -561,7 +643,18 @@ _node_pick_proxy() {
         ((w > namew)) && namew=$w
     done
 
-    if _node_has_fzf; then
+    if [ "$(_node_picker)" = arrow ]; then
+        local displays=()
+        for i in "${!names[@]}"; do
+            displays+=("$(printf '%s  [%s]' \
+                "$(_pad "${names[$i]}" "$namew")" \
+                "${types[$i]}")")
+        done
+        _node_arrow_select "$prompt" displays names
+        return
+    fi
+
+    if [ "$(_node_picker)" = fzf ]; then
         local selected status preview_dir preview_args=()
         preview_dir=$(_node_fzf_preview_dir)
         if [ -n "$preview_dir" ]; then
@@ -659,7 +752,27 @@ _node_pick_member() {
         done
     fi
 
-    if _node_has_fzf; then
+    if [ "$(_node_picker)" = arrow ]; then
+        local displays=()
+        for i in "${!members[@]}"; do
+            marker=' '
+            [ "${members[$i]}" = "$now" ] && marker='*'
+            if [ "$with_delay" = true ]; then
+                delay_label=$(_node_delay_label "${delays[${members[$i]}]:-}")
+                pad=$((delayw - $(_dispwidth "$delay_label")))
+                displays+=("$(printf '%s %s  %s' \
+                    "$marker" \
+                    "$(_pad "${members[$i]}" "$namew")" \
+                    "$(_node_spaces "$pad")$(_node_delay_color "$delay_label")")")
+            else
+                displays+=("$(printf '%s %s' "$marker" "${members[$i]}")")
+            fi
+        done
+        _node_arrow_select "${group} > 请选择节点（* 为当前）：" displays members
+        return
+    fi
+
+    if [ "$(_node_picker)" = fzf ]; then
         local selected fzf_header='* 表示当前节点；Enter 切换，Esc 退出'
         [ "$with_delay" = true ] && {
             fzf_header='* 表示当前节点；Enter 切换，Esc 退出'
