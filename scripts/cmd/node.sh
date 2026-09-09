@@ -412,16 +412,29 @@ _node_hint_fzf() {
     _okcat '💡' '已使用方向键选择；安装 fzf 并 export CLASHCTL_NODE_PICKER=fzf 可启用搜索式选择界面。' >&2
 }
 
-# 选择器路由：交互终端默认方向键；CLASHCTL_NODE_PICKER=fzf 且已装 fzf 时用搜索式界面；
-# 非交互终端回退到编号输入
+# 选择器路由：CLASHCTL_NODE_PICKER 可显式指定 fzf/arrow/number；
+# 缺省（auto）：交互终端用方向键，非交互终端回退编号输入
 _node_picker() {
-    if [ "${CLASHCTL_NODE_PICKER:-}" = "fzf" ] && _node_has_fzf; then
-        printf 'fzf'
-    elif [ -t 0 ]; then
-        printf 'arrow'
-    else
+    case "${CLASHCTL_NODE_PICKER:-auto}" in
+    fzf)
+        _node_has_fzf && {
+            printf 'fzf'
+            return
+        }
+        ;;
+    arrow)
+        [ -t 0 ] && {
+            printf 'arrow'
+            return
+        }
+        ;;
+    number)
         printf 'number'
-    fi
+        return
+        ;;
+    esac
+    # auto 及指定模式不可用时的兜底
+    [ -t 0 ] && printf 'arrow' || printf 'number'
 }
 
 _node_arrow_draw() {
